@@ -18,4 +18,3 @@ A web-based blood donation management platform built with Python and FastAPI. Th
 - **Notifications:** Sends notifications to relevant donors when a new blood request is created.
 - **Donation Management:** Tracks successful donations and donor donation history.
 - **Admin Analytics:** Provides graphical representations of total and successful donations along with other system statistics.
-- **Authentication:** Secure login and role-based access using JWT authentication.
