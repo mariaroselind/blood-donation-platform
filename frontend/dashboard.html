@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - BloodConnect</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Dashboard Layout */
+        body { display: flex; height: 100vh; overflow: hidden; background-color: var(--bg-light); }
+        
+        /* Sidebar */
+        .sidebar { width: 260px; background-color: var(--bg-white); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; transition: var(--transition); z-index: 10; }
+        .sidebar-header { padding: 20px; font-size: 18px; font-weight: 700; color: var(--primary-red); border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 10px; }
+        .sidebar-menu { list-style: none; padding: 20px 0; overflow-y: auto; flex: 1; }
+        .sidebar-menu li a { display: flex; align-items: center; gap: 12px; padding: 12px 24px; color: var(--text-main); font-size: 14px; font-weight: 500; transition: var(--transition); }
+        .sidebar-menu li a:hover, .sidebar-menu li.active a { background-color: #ffebee; color: var(--primary-red); border-right: 4px solid var(--primary-red); }
+        
+        /* Main Wrapper */
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Top Navbar */
+        .navbar { height: 70px; background-color: var(--bg-white); border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; padding: 0 30px; }
+        .navbar-left { display: flex; align-items: center; gap: 20px; }
+        .toggle-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-main); }
+        .navbar-right { display: flex; align-items: center; gap: 20px; }
+        .user-profile { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 14px; }
+        
+        /* Content Area */
+        .content-area { flex: 1; padding: 30px; overflow-y: auto; }
+        
+        /* Dashboard Cards Grid */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: var(--bg-white); padding: 20px; border-radius: var(--radius); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; }
+        .stat-card h3 { font-size: 28px; color: var(--primary-red); margin-top: 5px; }
+        .stat-card p { font-size: 13px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; }
+        .stat-icon { font-size: 36px; color: #ffcdd2; }
+
+        /* Tables */
+        .table-container { background: var(--bg-white); border-radius: var(--radius); border: 1px solid var(--border-light); overflow: hidden; box-shadow: var(--shadow-sm); }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+        th, td { padding: 14px 20px; border-bottom: 1px solid var(--border-light); }
+        th { background-color: #fafafa; font-weight: 600; color: var(--text-main); }
+        tr:hover { background-color: #fcfcfc; }
+        
+        /* Badges */
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 50px; font-size: 12px; font-weight: 500; }
+        .badge-pending { background: #fff8e1; color: #f57f17; }
+        .badge-accepted { background: #e3f2fd; color: #1565c0; }
+        .badge-completed { background: #e8f5e9; color: #2e7d32; }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-droplet"></i> BloodConnect
+        </div>
+        <ul class="sidebar-menu" id="sidebar-menu">
+            <!-- Dynamically populated via JS based on role -->
+        </ul>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <!-- Top Navbar -->
+        <header class="navbar">
+            <div class="navbar-left">
+                <button class="toggle-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+                <h3 id="page-title">Dashboard Overview</h3>
+            </div>
+            <div class="navbar-right">
+                <div class="user-profile">
+                    <i class="fa-solid fa-circle-user" style="font-size: 24px; color: var(--primary-red);"></i>
+                    <span id="user-display-name">Loading...</span>
+                </div>
+                <button class="btn btn-outline" onclick="logout()" style="padding: 6px 12px; font-size: 13px;"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+            </div>
+        </header>
+
+        <!-- Dynamic Content Area -->
+        <main class="content-area" id="main-content">
+            <!-- Loaded dynamically -->
+        </main>
+    </div>
+
+    <script>
+        const role = localStorage.getItem('role') || 'patient';
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        // Setup Sidebar based on role
+        const menuEl = document.getElementById('sidebar-menu');
+        if (role === 'patient') {
+            menuEl.innerHTML = `
+                <li class="active"><a href="#" onclick="loadView('patient-dash')"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+                <li><a href="#" onclick="loadView('patient-request')"><i class="fa-solid fa-plus-circle"></i> New Blood Request</a></li>
+            `;
+        } else if (role === 'donor') {
+            menuEl.innerHTML = `
+                <li class="active"><a href="#" onclick="loadView('donor-dash')"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+            `;
+        } else if (role === 'admin') {
+            menuEl.innerHTML = `
+                <li class="active"><a href="#" onclick="loadView('admin-dash')"><i class="fa-solid fa-chart-pie"></i> System Overview</a></li>
+            `;
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.style.display = sidebar.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+
+        // Initial View Load
+        window.onload = () => {
+            if (role === 'patient') loadView('patient-dash');
+            if (role === 'donor') loadView('donor-dash');
+            if (role === 'admin') loadView('admin-dash');
+        };
+
+        async function loadView(viewName) {
+            const content = document.getElementById('main-content');
+            
+            if (viewName === 'patient-dash') {
+                document.getElementById('page-title').innerText = 'Patient Dashboard';
+                content.innerHTML = `<p>Loading dashboard data...</p>`;
+                try {
+                    const res = await fetch('/api/patients/dashboard', { headers: { 'Authorization': `Bearer ${token}` } });
+                    const data = await res.json();
+                    if (res.ok) {
+                        document.getElementById('user-display-name').innerText = data.profile.name;
+                        content.innerHTML = `
+                            <div class="dashboard-grid">
+                                <div class="stat-card">
+                                    <div><p>Total Requests</p><h3>${data.my_requests.length}</h3></div>
+                                    <i class="fa-solid fa-folder-open stat-icon"></i>
+                                </div>
+                            </div>
+                            <h3 style="margin-bottom: 15px;">My Blood Requests</h3>
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr><th>Blood Group</th><th>Hospital</th><th>Location</th><th>Units</th><th>Required Date</th><th>Status</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.my_requests.length ? data.my_requests.map(r => `
+                                            <tr>
+                                                <td><strong>${r.blood_group}</strong></td>
+                                                <td>${r.hospital}</td>
+                                                <td>${r.hospital_location}</td>
+                                                <td>${r.units_required}</td>
+                                                <td>${r.required_date}</td>
+                                                <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="6" style="text-align:center;">No requests found.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    }
+                } catch (err) { content.innerHTML = `<p style="color: red;">Error loading dashboard.</p>`; }
+            } 
+            else if (viewName === 'patient-request') {
+                document.getElementById('page-title').innerText = 'Create Blood Request';
+                content.innerHTML = `
+                    <div class="card" style="max-width: 700px; margin: 0 auto;">
+                        <h3 style="margin-bottom: 20px;">New Emergency Request</h3>
+                        <form onsubmit="submitRequest(event)">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                <div><label>Bystander Name</label><input type="text" id="bname" required style="width:100%; padding:10px; border:1px solid var(--border-light); border-radius:var(--radius);"></div>
+                                <div><label>Bystander Phone</label><input type="text" id="bphone" required style="width:100%; padding:10px; border:1px solid var(--border-light); border-radius:var(--radius);"></div>
+                                <div><label>Blood Group</label><select id="bgrp" required style="width:100%; padding:10px; border:1px solid var(--border-light); border-radius:var(--radius);"><option value="O+">O+</option><option value="O-">O-</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option></select></div>
+                                <div><label>Units Required</label><input type="number" id="units" required style="width:100%; padding:10px; border:1px solid var(--border-light); border-radius:var(--radius);"></div>
+                                <div><label>Hospital Name</label><input type="text" id="hosp" required style="width:100%; padding:10px; border:1px solid var(--border-light); border-radius:var(--radius);"></div>
+                                <div><label>Hospital Location</label><input type="text" id="hloc" required style="width:100%; padding:10px; border:1px solid var(--border-light); border-radius:var(--radius);"></div>
+                                <div style="grid-column: span 2;"><label>Required Date</label><input type="date" id="rdate" required style="width:100%; padding:10px; border:1px solid var(--border-light); border-radius:var(--radius);"></div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit Request & Trigger Matching</button>
+                        </form>
+                    </div>
+                `;
+            }
+            else if (viewName === 'donor-dash') {
+                document.getElementById('page-title').innerText = 'Donor Dashboard - Emergency Requests';
+                content.innerHTML = `<p>Loading donor portal...</p>`;
+                try {
+                    const res = await fetch('/api/donors/dashboard', { headers: { 'Authorization': `Bearer ${token}` } });
+                    const data = await res.json();
+                    if (res.ok) {
+                        document.getElementById('user-display-name').innerText = data.profile.name;
+                        content.innerHTML = `
+                            <div class="dashboard-grid">
+                                <div class="stat-card">
+                                    <div><p>Matched Requests</p><h3>${data.my_matches.length}</h3></div>
+                                    <i class="fa-solid fa-handshake stat-icon"></i>
+                                </div>
+                            </div>
+                            <h3 style="margin-bottom: 15px;">Assigned Blood Requests</h3>
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr><th>Patient</th><th>Blood Group</th><th>Hospital</th><th>Required Date</th><th>Status</th><th>Action</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.my_matches.length ? data.my_matches.map(m => `
+                                            <tr>
+                                                <td><strong>${m.patient_name}</strong></td>
+                                                <td><span style="color: var(--primary-red); font-weight: 600;">${m.blood_group}</span></td>
+                                                <td>${m.hospital}</td>
+                                                <td>${m.required_date}</td>
+                                                <td><span class="badge badge-${m.match_status.toLowerCase()}">${m.match_status}</span></td>
+                                                <td>
+                                                    ${m.match_status === 'Pending' ? `
+                                                        <button class="btn btn-primary" style="padding: 6px 14px; font-size: 12px;" onclick="updateMatch(${m.id}, 'Accepted')">Accept</button>
+                                                    ` : '<span style="color: var(--text-muted); font-size: 13px;">Responded</span>'}
+                                                </td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="6" style="text-align:center; padding: 20px;">No blood requests currently matching your blood group.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    }
+                } catch (err) { content.innerHTML = `<p style="color: red;">Error loading donor dashboard.</p>`; }
+            }
+            else if (viewName === 'admin-dash') {
+                document.getElementById('page-title').innerText = 'System Overview & Analytics';
+                content.innerHTML = `<p>Loading admin analytics...</p>`;
+                try {
+                    const res = await fetch('/api/admin/dashboard', { headers: { 'Authorization': `Bearer ${token}` } });
+                    const data = await res.json();
+                    if (res.ok) {
+                        window.adminData = data;
+                        document.getElementById('user-display-name').innerText = 'Administrator';
+                        content.innerHTML = `
+                            <div class="dashboard-grid">
+                                <div class="stat-card" style="cursor: pointer;" onclick="renderAdminTable('patients')">
+                                    <div><p>Total Patients</p><h3>${data.system_stats.total_patients}</h3></div>
+                                    <i class="fa-solid fa-bed-pulse stat-icon"></i>
+                                </div>
+                                <div class="stat-card" style="cursor: pointer;" onclick="renderAdminTable('donors')">
+                                    <div><p>Total Donors</p><h3>${data.system_stats.total_donors}</h3></div>
+                                    <i class="fa-solid fa-users stat-icon"></i>
+                                </div>
+                                <div class="stat-card" style="cursor: pointer;" onclick="renderAdminTable('requests')">
+                                    <div><p>Total Requests</p><h3>${data.system_stats.total_requests}</h3></div>
+                                    <i class="fa-solid fa-file-medical stat-icon"></i>
+                                </div>
+                                <div class="stat-card" style="cursor: pointer;" onclick="renderAdminTable('matches')">
+                                    <div><p>Successful Donations</p><h3>${data.system_stats.total_completed}</h3></div>
+                                    <i class="fa-solid fa-chart-line stat-icon"></i>
+                                </div>
+                            </div>
+
+                            <!-- Analytics Graph Container -->
+                            <div class="card" style="margin-bottom: 30px; padding: 20px;">
+                                <h3 style="margin-bottom: 15px; font-size: 16px;"><i class="fa-solid fa-chart-bar" style="color: var(--primary-red);"></i> Donation Summary & System Metrics</h3>
+                                <div style="position: relative; height: 250px; width: 100%;">
+                                    <canvas id="donationChart"></canvas>
+                                </div>
+                            </div>
+                            
+                            <div id="admin-table-container"></div>
+                        `;
+
+                        // Render the Chart.js Bar Chart
+                        const ctx = document.getElementById('donationChart').getContext('2d');
+                        new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: ['Patients', 'Donors', 'Blood Requests', 'Total Matches', 'Successful Donations'],
+                                datasets: [{
+                                    label: 'System Metrics Count',
+                                    data: [
+                                        data.system_stats.total_patients,
+                                        data.system_stats.total_donors,
+                                        data.system_stats.total_requests,
+                                        data.system_stats.total_matches,
+                                        data.system_stats.total_completed
+                                    ],
+                                    backgroundColor: ['#e3f2fd', '#fff8e1', '#ffebee', '#e8f5e9', '#E53935'],
+                                    borderColor: ['#1565c0', '#f57f17', '#c62828', '#2e7d32', '#c62828'],
+                                    borderWidth: 1,
+                                    borderRadius: 6
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                            }
+                        });
+
+                        renderAdminTable('matches'); // Default view shows matches table below
+                    }
+                } catch (err) { content.innerHTML = `<p style="color: red;">Error loading admin dashboard.</p>`; }
+            }
+        }
+
+        function renderAdminTable(type) {
+            const container = document.getElementById('admin-table-container');
+            const data = window.adminData;
+            if (!data) return;
+
+            if (type === 'patients') {
+                container.innerHTML = `
+                    <h3 style="margin-bottom: 15px;">Registered Patients</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Location</th></tr></thead>
+                            <tbody>
+                                ${data.all_patients.length ? data.all_patients.map(p => `
+                                    <tr><td>#${p.id}</td><td><strong>${p.name}</strong></td><td>${p.phone}</td><td>${p.location}</td></tr>
+                                `).join('') : '<tr><td colspan="4" style="text-align:center;">No patients found.</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (type === 'donors') {
+                container.innerHTML = `
+                    <h3 style="margin-bottom: 15px;">Registered Donors</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>ID</th><th>Name</th><th>Blood Group</th><th>Phone</th><th>Location</th><th>Status</th></tr></thead>
+                            <tbody>
+                                ${data.all_donors.length ? data.all_donors.map(d => `
+                                    <tr><td>#${d.id}</td><td><strong>${d.name}</strong></td><td>${d.blood_group}</td><td>${d.phone}</td><td>${d.location}</td><td>${d.availability_status}</td></tr>
+                                `).join('') : '<tr><td colspan="6" style="text-align:center;">No donors found.</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (type === 'requests') {
+                container.innerHTML = `
+                    <h3 style="margin-bottom: 15px;">All Blood Requests</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>ID</th><th>Blood Group</th><th>Hospital</th><th>Units</th><th>Required Date</th><th>Status</th></tr></thead>
+                            <tbody>
+                                ${data.all_requests.length ? data.all_requests.map(r => `
+                                    <tr><td>#${r.id}</td><td><strong>${r.blood_group}</strong></td><td>${r.hospital}</td><td>${r.units_required}</td><td>${r.required_date}</td><td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td></tr>
+                                `).join('') : '<tr><td colspan="6" style="text-align:center;">No requests found.</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (type === 'matches') {
+                container.innerHTML = `
+                    <h3 style="margin-bottom: 15px;">Active System Matches</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Match ID</th><th>Request ID</th><th>Donor ID</th><th>Status</th><th>Action</th></tr></thead>
+                            <tbody>
+                                ${data.all_matches.length ? data.all_matches.map(m => `
+                                    <tr>
+                                        <td>#${m.id}</td><td>Request #${m.request_id}</td><td>Donor #${m.donor_id}</td>
+                                        <td><span class="badge badge-${m.match_status.toLowerCase()}">${m.match_status}</span></td>
+                                        <td>
+                                            ${m.match_status === 'Accepted' ? `
+                                                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 12px; background-color: #2e7d32;" onclick="completeMatch(${m.id})">Mark Completed</button>
+                                            ` : '<span style="color: var(--text-muted); font-size: 13px;">No action needed</span>'}
+                                        </td>
+                                    </tr>
+                                `).join('') : '<tr><td colspan="5" style="text-align:center;">No matches recorded.</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        }
+        async function submitRequest(e) {
+            e.preventDefault();
+            const payload = {
+                bystander_name: document.getElementById('bname').value,
+                bystander_phone: document.getElementById('bphone').value,
+                blood_group: document.getElementById('bgrp').value,
+                hospital: document.getElementById('hosp').value,
+                hospital_location: document.getElementById('hloc').value,
+                units_required: parseInt(document.getElementById('units').value),
+                required_date: document.getElementById('rdate').value
+            };
+            const res = await fetch('/api/patients/requests', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert('Blood request created successfully!');
+                loadView('patient-dash');
+            } else {
+                alert('Failed to create request.');
+            }
+        }
+
+        async function updateMatch(matchId, status) {
+            const res = await fetch(`/api/donors/matches/${matchId}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ match_status: status })
+            });
+            if (res.ok) {
+                alert('Match status updated!');
+                loadView('donor-dash');
+            }
+        }
+    </script>
+</body>
+</html>

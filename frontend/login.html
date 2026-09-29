@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - BloodConnect</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .auth-container { width: 100%; max-width: 420px; padding: 30px; background: var(--bg-white); border-radius: var(--radius); box-shadow: var(--shadow-md); border: 1px solid var(--border-light); }
+        .role-tabs { display: flex; gap: 10px; margin-bottom: 25px; }
+        .role-tab { flex: 1; padding: 10px; text-align: center; border: 1px solid var(--border-light); background: var(--bg-light); border-radius: var(--radius); cursor: pointer; font-weight: 500; font-size: 14px; }
+        .role-tab.active { background: var(--primary-red); color: white; border-color: var(--primary-red); }
+        .form-group { margin-bottom: 20px; position: relative; }
+        .form-group label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid var(--border-light); border-radius: var(--radius); font-size: 14px; }
+        .form-group input:focus { outline: none; border-color: var(--primary-red); }
+        .password-toggle { position: absolute; right: 12px; top: 38px; cursor: pointer; color: var(--text-muted); }
+        .alert { padding: 10px; border-radius: var(--radius); font-size: 13px; margin-bottom: 15px; display: none; }
+        .alert-error { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+    </style>
+</head>
+<body>
+
+    <div class="auth-container">
+        <h2 style="margin-bottom: 20px; text-align: center;"><i class="fa-solid fa-droplet" style="color: var(--primary-red);"></i> Portal Login</h2>
+        
+        <!-- Role Selector Tabs -->
+        <div class="role-tabs">
+            <div class="role-tab active" onclick="setRole('patient')">Patient</div>
+            <div class="role-tab" onclick="setRole('donor')">Donor</div>
+            <div class="role-tab" onclick="setRole('admin')">Admin</div>
+        </div>
+
+        <div id="alert-box" class="alert alert-error"></div>
+
+        <form id="login-form" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label><i class="fa-solid fa-envelope"></i> Email Address</label>
+                <input type="email" id="email" required placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label><i class="fa-solid fa-lock"></i> Password</label>
+                <input type="password" id="password" required placeholder="Enter your password">
+                <i class="fa-solid fa-eye password-toggle" onclick="togglePassword()"></i>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Secure Login</button>
+        </form>
+
+        <!-- NEW: Dynamic Register Prompt based on active tab -->
+        <div id="register-prompt" style="text-align: center; margin-top: 15px; font-size: 13px; color: var(--text-muted);">
+            <!-- Populated via JavaScript -->
+        </div>
+        
+        <p style="text-align: center; margin-top: 15px; font-size: 13px;">
+            <a href="/" style="color: var(--text-muted);"><i class="fa-solid fa-arrow-left"></i> Back to Home</a>
+        </p>
+    </div>
+
+    <script>
+        let currentRole = 'patient';
+
+        function setRole(role) {
+            currentRole = role;
+            document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Dynamically show/hide the registration link
+            const regPrompt = document.getElementById('register-prompt');
+            if (role === 'patient') {
+                regPrompt.innerHTML = `Don't have a patient account? <a href="/register.html?role=patient" style="color: var(--primary-red); font-weight: 500;">Register here</a>`;
+                regPrompt.style.display = 'block';
+            } else if (role === 'donor') {
+                regPrompt.innerHTML = `Want to save lives? <a href="/register.html?role=donor" style="color: var(--primary-red); font-weight: 500;">Register as Donor</a>`;
+                regPrompt.style.display = 'block';
+            } else {
+                regPrompt.style.display = 'none'; // Admin doesn't need public registration
+            }
+        }
+
+        // Trigger default role display on page load
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const role = urlParams.get('role');
+            if (role === 'donor') {
+                document.querySelectorAll('.role-tab')[1].click();
+            } else {
+                document.querySelectorAll('.role-tab')[0].click(); // Defaults to Patient
+            }
+        };
+
+        function togglePassword() {
+            const pwd = document.getElementById('password');
+            pwd.type = pwd.type === 'password' ? 'text' : 'password';
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const alertBox = document.getElementById('alert-box');
+            alertBox.style.display = 'none';
+
+            // Endpoint mapping based on role
+            const endpoint = currentRole === 'admin' ? '/api/admin/login' : `/api/${currentRole}s/login`;
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ 'username': email, 'password': password })
+                });
+                
+                const data = await res.json();
+
+                if (res.ok) {
+                    localStorage.setItem('token', data.access_token);
+                    localStorage.setItem('role', currentRole);
+                    window.location.href = '/dashboard.html';
+                } else {
+                    alertBox.innerText = data.detail || 'Invalid credentials.';
+                    alertBox.style.display = 'block';
+                }
+            } catch (err) {
+                alertBox.innerText = 'Server connection error.';
+                alertBox.style.display = 'block';
+            }
+        }
+
+        // Auto-select role if passed via URL query parameter (e.g. login.html?role=donor)
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const role = urlParams.get('role');
+            if (role) {
+                const tabs = document.querySelectorAll('.role-tab');
+                if (role === 'patient') setRole('patient');
+                if (role === 'donor') { setRole('donor'); tabs[1].click(); }
+                if (role === 'admin') { setRole('admin'); tabs[2].click(); }
+            }
+        };
+    </script>
+</body>
+</html>
